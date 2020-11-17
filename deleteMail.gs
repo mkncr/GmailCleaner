@@ -13,19 +13,9 @@ function deleteMail() {
     '-is:starred',
     'is:read'
   ];
-  
-  function zfill(num,len){
-    return ('0000'+num).slice(-len);
-  }
-  
+   
   function createDateStr(dt){
-    const yyyy=dt.getFullYear();
-    const MM=zfill(dt.getMonth()+1,2);
-    const dd=zfill(dt.getDate(),2);
-    const HH=zfill(dt.getHours(),2);
-    const mm=zfill(dt.getMinutes(),2);
-    const ss=zfill(dt.getSeconds(),2);
-    return [yyyy,"-",MM,"-",dd," ",HH,":",mm,":",ss].join("");
+    return Utilities.formatDate(dt,Session.getTimeZone(),"yyyy-MM-dd HH:mm:ss");
   }
   
   var deleteLog = new Map();
