@@ -1,58 +1,94 @@
-function GmailCleanerMain() {
+function gmailCleanerMain() {
     const scriptStartDate = new Date();
+    const funcName = arguments.callee.name;
 
     // Please fill in the conditions of the email to be deleted.
     const searchCondition = [
         'category:social',
         'subject:GmailCleaner Report'
-    ];
+    ]
+
     // Emails older than the specified period will be deleted.
     const delayDays = "1m";
+
     // This condition always applies.
     const baseCondition = [
         'older_than:' + delayDays,
         '-is:starred',
         'is:read'
-    ];
+    ]
 
-    const deleteLog = Cleaner(scriptStartDate, searchCondition, baseCondition);
+    deleteTrigger(funcName);
+    const deleteLog = cleaner(scriptStartDate, searchCondition, baseCondition, funcName);
 
     if (deleteLog.size) {
         const sortedLog = new Map([...deleteLog.entries()].sort((a, b) => a[0] - b[0]));
         const address = Session.getEffectiveUser().getEmail();
         MailApp.sendEmail(address, 'GmailCleaner Report', Array.from(sortedLog.values()).join("\n"));
-    };
+    }
+
+    // Set the default trigger.
+    setTrigger(funcName);
 }
 
 
-function CreateDateStr(dt) {
+function deleteTrigger(funcName) {
+    const triggers = ScriptApp.getProjectTriggers();
+    triggers.forEach(function(trigger) {
+        if (trigger.getHandlerFunction() == funcName) {
+            ScriptApp.deleteTrigger(trigger);
+        }
+    });
+}
+
+
+function setTrigger(funcName, durationSec = null) {
+    const dt = new Date();
+    if (durationSec === null) {
+        dt.setMonth(dt.getMonth() + 1);
+        dt.setDate(1);
+        dt.setHours(0);
+        dt.setMinutes(0);
+        dt.setSeconds(0);
+        dt.setMilliseconds(0);
+    } else {
+        dt.setSeconds(dt.getSeconds() + durationSec);
+    }
+    ScriptApp.newTrigger(funcName).timeBased().at(dt).create();
+}
+
+
+
+function createDateStr(dt) {
     return Utilities.formatDate(dt, Session.getTimeZone(), "yyyy-MM-dd HH:mm:ss");
 }
 
 
-function Cleaner(scriptStartDate, searchCondition, baseCondition) {
+function cleaner(scriptStartDate, searchCondition, baseCondition, funcName, batch_size = 500) {
+    const threshold = 4 * 60 * 1000
     var deleteLog = new Map();
-    const MAX_SIZE = 500;
-    searchCondition.forEach(function(elem) {
+    for (var i = 0; i < searchCondition.length; i++) {
+        const elem = searchCondition[i];
         const mergeCondition = baseCondition.concat(elem).join("\u0020");
 
-        var response = GmailApp.search(mergeCondition, 0, MAX_SIZE);
+        var response = GmailApp.search(mergeCondition, 0, batch_size);
         do {
-            response.forEach(function(thread) {
+            for (var j = 0; j < response.length; j++) {
+                const thread = response[j]
                 thread.getMessages().forEach(function(msg) {
-
                     const dt = msg.getDate();
-                    deleteLog.set(dt, [CreateDateStr(dt), msg.getSubject(), msg.getFrom()].join("\u0020"));
+                    deleteLog.set(dt, [createDateStr(dt), msg.getSubject(), msg.getFrom()].join("\u0020"));
                 });
                 thread.moveToTrash();
-            });
+            }
             // Prevents Google Apps Script timeouts.
-            const timeDiff = new Date().getTime() - scriptStartDate.getTime()
-            if (timeDiff > 5 * 60 * 1000) {
+            const timeDiff = new Date().getTime() - scriptStartDate.getTime();
+            if (timeDiff > threshold) {
+                setTrigger(funcName, 60);
                 return deleteLog;
             }
-            response = GmailApp.search(mergeCondition, 0, MAX_SIZE);
+            response = GmailApp.search(mergeCondition, 0, batch_size);
         } while (response.length != 0);
-    });
+    }
     return deleteLog;
 }
