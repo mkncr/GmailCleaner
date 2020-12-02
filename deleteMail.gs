@@ -59,12 +59,33 @@ function setTrigger(funcName, durationSec = null) {
 
 
 
-function createDateStr(dt) {
-    return Utilities.formatDate(dt, Session.getTimeZone(), "yyyy-MM-dd HH:mm:ss");
+function createDateStr(dt = new Date(), format = "yyyy-MM-dd HH:mm:ss") {
+    return Utilities.formatDate(dt, Session.getTimeZone(), format);
+}
+
+
+function outputLog(addString, fileName) {
+    const folder = DriveApp.getRootFolder();
+    const files = folder.getFilesByName(fileName);
+    var exists = false;
+    var file
+    while (files.hasNext()) {
+        file = files.next();
+        if (fileName == file.getName()) {
+            exists = true;
+            break;
+        }
+    }
+    if (!exists) {
+        file = folder.createFile(fileName, "");
+    }
+    const existingString = file.getBlob().getDataAsString();
+    file.setContent(existingString + [addString, '\n'].join(""));
 }
 
 
 function cleaner(scriptStartDate, searchCondition, baseCondition, funcName, batch_size = 500) {
+    const logFileName = [createDateStr(scriptStartDate, "yyyyMMdd_HHmmss"), '_', funcName, '.log'].join("")
     const threshold = 4 * 60 * 1000
     var deleteLog = new Map();
     for (var i = 0; i < searchCondition.length; i++) {
@@ -77,7 +98,9 @@ function cleaner(scriptStartDate, searchCondition, baseCondition, funcName, batc
                 const thread = response[j]
                 thread.getMessages().forEach(function(msg) {
                     const dt = msg.getDate();
-                    deleteLog.set(dt, [createDateStr(dt), msg.getSubject(), msg.getFrom()].join("\u0020"));
+                    const log = [createDateStr(dt), msg.getSubject(), msg.getFrom()].join("\u0020")
+                    deleteLog.set(dt, log);
+                    outputLog(log, logFileName);
                 });
                 thread.moveToTrash();
             }
